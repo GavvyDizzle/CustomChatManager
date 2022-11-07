@@ -1,0 +1,14 @@
+name: CustomChatManager
+version: '${project.version}'
+main: com.github.gavvydizzle.customchatmanager.CustomChatManager
+api-version: 1.18
+prefix: "CustomChatManager"
+depend: [GangsPlugin, LuckPerms, MittenRankUps, PlaceholderAPI, ServerUtils]
+authors: [GavvyDizzle]
+description: Custom chat manager for Spigot
+commands:
+  chatmanageradmin:
+    aliases: [cma]
+    description: Reload command for CustomChatManager
+    permission-message: Insufficient permission
+    permission: customchatmanager.admin
