@@ -20,11 +20,6 @@ public final class CustomChatManager extends JavaPlugin {
         Objects.requireNonNull(getCommand("chatmanageradmin")).setExecutor(new ReloadCommand());
     }
 
-    @Override
-    public void onDisable() {
-
-    }
-
     public static CustomChatManager getInstance() {
         return instance;
     }

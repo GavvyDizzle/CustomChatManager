@@ -16,6 +16,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.plugin.RegisteredServiceProvider;
 
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,6 +29,7 @@ public class ChatManager implements Listener {
     private Track wardTrack, prestigeTrack;
     private String defaultMessageFormat, prestigeMessageFormat;
     private String nonInGangString, inGangString;
+    private boolean removeExtraWhitespace;
 
     public ChatManager() {
         RegisteredServiceProvider<LuckPerms> provider = Bukkit.getServicesManager().getRegistration(LuckPerms.class);
@@ -47,6 +49,7 @@ public class ChatManager implements Listener {
     public void reload() {
         FileConfiguration config = CustomChatManager.getInstance().getConfig();
         config.options().copyDefaults(true);
+        config.addDefault("removeExtraWhitespace", true);
         config.addDefault("trackNames.wards", "wards");
         config.addDefault("trackNames.prestiges", "prestiges");
         config.addDefault("format.default", "&8[<ward>&8]<gang> <rank> <name> &8»&7 <message>");
@@ -55,12 +58,14 @@ public class ChatManager implements Listener {
         config.addDefault("gang.inGang", " &8[&e%gangsplugin_gangName%&8]");
         CustomChatManager.getInstance().saveConfig();
 
-        wardTrack = luckPerms.getTrackManager().getTrack(config.getString("trackNames.wards"));
+        removeExtraWhitespace = config.getBoolean("removeExtraWhitespace");
+
+        wardTrack = luckPerms.getTrackManager().getTrack(config.getString("trackNames.wards", "wards"));
         if (wardTrack == null) {
             CustomChatManager.getInstance().getLogger().warning("The track '" + config.getString("trackNames.wards") + "' could not be found. Wards will not work!");
         }
 
-        prestigeTrack = luckPerms.getTrackManager().getTrack(config.getString("trackNames.prestiges"));
+        prestigeTrack = luckPerms.getTrackManager().getTrack(config.getString("trackNames.prestiges", "prestiges"));
         if (prestigeTrack == null) {
             CustomChatManager.getInstance().getLogger().warning("The track '" + config.getString("trackNames.prestiges") + "' could not be found. Prestiges will not work!");
         }
@@ -71,7 +76,7 @@ public class ChatManager implements Listener {
         inGangString = config.getString("gang.inGang");
     }
 
-    @EventHandler(priority = EventPriority.HIGH)
+    @EventHandler(priority = EventPriority.NORMAL)
     private void onChat(AsyncPlayerChatEvent e) {
         String format;
         if (rankupsAPI.getPrestigePosition(e.getPlayer()) > 0) {
@@ -79,13 +84,20 @@ public class ChatManager implements Listener {
 
             // <prestige> = Highest prestige
             if (prestigeTrack != null) {
-                Group prestigeGroup = luckPerms.getGroupManager().getGroup(prestigeTrack.getGroups().get(rankupsAPI.getPrestigePosition(e.getPlayer())));
-                if (prestigeGroup != null) {
-                    if (prestigeGroup.getCachedData().getMetaData().getPrefix() != null) {
-                        format = format.replace("<prestige>", prestigeGroup.getCachedData().getMetaData().getPrefix());
-                    }
-                    else {
-                        format = format.replace("<prestige>", prestigeGroup.getName());
+                List<String> prestigeGroups = prestigeTrack.getGroups();
+                int prestige = rankupsAPI.getPrestigePosition(e.getPlayer());
+
+                if (prestige < 0 || prestige >= prestigeGroups.size()) {
+                    format = format.replace("<prestige>", "");
+                }
+                else {
+                    Group prestigeGroup = luckPerms.getGroupManager().getGroup(prestigeGroups.get(prestige));
+                    if (prestigeGroup != null) {
+                        if (prestigeGroup.getCachedData().getMetaData().getPrefix() != null) {
+                            format = format.replace("<prestige>", prestigeGroup.getCachedData().getMetaData().getPrefix());
+                        } else {
+                            format = format.replace("<prestige>", prestigeGroup.getName());
+                        }
                     }
                 }
             }
@@ -109,13 +121,20 @@ public class ChatManager implements Listener {
 
         // <ward> = Highest ward
         if (wardTrack != null) {
-            Group wardGroup = luckPerms.getGroupManager().getGroup(wardTrack.getGroups().get(rankupsAPI.getWardPosition(e.getPlayer()) - 1));
-            if (wardGroup != null) {
-                if (wardGroup.getCachedData().getMetaData().getPrefix() != null) {
-                    format = format.replace("<ward>", wardGroup.getCachedData().getMetaData().getPrefix());
-                }
-                else {
-                    format = format.replace("<ward>", wardGroup.getName());
+            List<String> wardGroups = wardTrack.getGroups();
+            int ward = rankupsAPI.getWardPosition(e.getPlayer()) - 1;
+
+            if (ward < 0 || ward >= wardGroups.size()) {
+                format = format.replace("<ward>", "");
+            }
+            else {
+                Group wardGroup = luckPerms.getGroupManager().getGroup(wardGroups.get(ward));
+                if (wardGroup != null) {
+                    if (wardGroup.getCachedData().getMetaData().getPrefix() != null) {
+                        format = format.replace("<ward>", wardGroup.getCachedData().getMetaData().getPrefix());
+                    } else {
+                        format = format.replace("<ward>", wardGroup.getName());
+                    }
                 }
             }
         }
@@ -132,6 +151,7 @@ public class ChatManager implements Listener {
         format = PlaceholderAPI.setPlaceholders(e.getPlayer(), format);
         format = reformatHex(format);
         format = Colors.conv(format);
+        if (removeExtraWhitespace) format = format.trim().replaceAll(" +", " ");
         e.setFormat(format);
     }
 
@@ -140,7 +160,9 @@ public class ChatManager implements Listener {
         Matcher matcher = pattern.matcher(message);
 
         while (matcher.find()) {
-            String code = message.substring(matcher.start(), matcher.end());
+            String code = matcher.group(1);
+            if (code == null) code = matcher.group(2);
+
             message = message.replace(code, "<SOLID:" + code.substring(2) + ">");
         }
 
